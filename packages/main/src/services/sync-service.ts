@@ -4,6 +4,7 @@ import type {SafeAny} from '../../../shared/types/db';
 import { createLogger } from '../../../shared/utils/logger';
 import { MAIN_LOGGER_LABEL } from '../constants';
 import { dialog } from 'electron';
+import { getSettings } from '../utils/get-settings';
 const logger = createLogger(MAIN_LOGGER_LABEL);
 let addon: unknown;
 if (!app.isPackaged) {
@@ -12,7 +13,7 @@ if (!app.isPackaged) {
 } else {
   // 生产环境：根据平台和架构选择正确路径
   // const addonDir = `${process.platform}-${process.arch}`;
-  
+
   const addonPath = path.join(
     process.resourcesPath,
     'app.asar.unpacked/node_modules/window-addon/',
@@ -33,12 +34,12 @@ export const initSyncService = () => {
     logger.error('Window addon not loaded properly', process.resourcesPath);
     return;
   }
-  
+
   // 检查辅助功能权限（仅macOS）
   if (process.platform === 'darwin') {
     const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
     logger.info(`Accessibility permission: ${hasPermission ? 'granted' : 'denied'}`);
-    
+
     if (!hasPermission) {
       // 在应用启动时提示用户授予权限
       logger.warn('应用需要辅助功能权限来排列窗口');
@@ -56,8 +57,9 @@ export const initSyncService = () => {
       });
     }
   }
-  
-  const windowManager = new (addon as SafeAny).WindowManager();
+
+  const settings = getSettings();
+  const windowManager = new (addon as SafeAny).WindowManager(settings.browserName || 'Google Chrome');
 
   logger.info('WindowManager initialized');
 
@@ -76,7 +78,7 @@ export const initSyncService = () => {
         logger.error('Native function execution error:', e);
         throw e;
       }
-      
+
       return {success: true};
     } catch (error) {
       logger.error('Window arrangement failed:', error);

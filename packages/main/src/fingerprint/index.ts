@@ -139,14 +139,14 @@ export async function openFingerprintWindow(id: number, headless = false) {
   const release = await mutex.acquire();
   try {
     const windowData = await WindowDB.getById(id);
-    
+
     // 检查窗口是否已经打开
     if (windowData.status === 2 && windowData.port) {
       logger.info(`Window ${id} is already running on port ${windowData.port}`);
       try {
         const browserURL = `http://${HOST}:${windowData.port}`;
         const {data} = await api.get(browserURL + '/json/version');
-        
+
         // 如果能成功获取到浏览器信息，说明窗口仍然可用
         if (data) {
           logger.info(`Window ${id} is already running on port ${windowData.port}`);
@@ -302,6 +302,14 @@ export async function openFingerprintWindow(id: number, headless = false) {
       }
       // const iconPath = await generateChromeIcon(windowDataDir, id);
 
+      // 处理用户自定义的 Chrome 启动参数
+      if (settings.chromeArgs) {
+        const customArgs = settings.chromeArgs
+          .split('\n')
+          .map(arg => arg.trim())
+          .filter(arg => arg && !arg.startsWith('#')); // 过滤空行和注释行
+        launchParamter.push(...customArgs);
+      }
 
       let chromeInstance;
       try {

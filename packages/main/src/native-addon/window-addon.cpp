@@ -61,52 +61,59 @@ public:
         return exports;
     }
 
-    WindowManager(const Napi::CallbackInfo& info) : Napi::ObjectWrap<WindowManager>(info) {}
+    WindowManager(const Napi::CallbackInfo& info) : Napi::ObjectWrap<WindowManager>(info) {
+        if (info.Length() < 1) {
+            throw Napi::TypeError::New(info.Env(), "Browser name is required");
+            return;
+        }
+        browserName = info[0].As<Napi::String>().Utf8Value();
+    }
 
 private:
+    std::string browserName;
     #ifdef _WIN32
     bool ArrangeWindow(HWND hwnd, int x, int y, int width, int height, bool preserveSize = false) {
         if (!hwnd) return false;
-        
+
         if (IsIconic(hwnd)) {
             ShowWindow(hwnd, SW_RESTORE);
         }
         SetForegroundWindow(hwnd);
-        
+
         LONG style = GetWindowLong(hwnd, GWL_STYLE);
         if (style == 0) {
             LOG_ERROR("Failed to get window style");
             return false;
         }
-        
+
         style &= ~(WS_MAXIMIZE | WS_MINIMIZE);
         if (SetWindowLong(hwnd, GWL_STYLE, style) == 0) {
             LOG_ERROR("Failed to set window style");
             return false;
         }
-        
+
         UINT flags = SWP_SHOWWINDOW | SWP_FRAMECHANGED;
         if (preserveSize) {
             flags |= SWP_NOSIZE;
         }
-        
+
         if (!SetWindowPos(hwnd, HWND_TOPMOST, x, y, width, height, flags)) {
             LOG_ERROR("Failed to set window position");
             return false;
         }
-        
+
         if (!SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, width, height, flags)) {
             LOG_ERROR("Failed to reset window z-order");
             return false;
         }
-        
+
         return true;
     }
 
     bool IsExtensionWindow(const char* title, const char* className) {
         return title != nullptr &&
                strlen(title) > 0 &&
-               strstr(title, "Google Chrome") == nullptr;
+               strstr(title, browserName.c_str()) == nullptr;
     }
 
     std::vector<WindowInfo> FindWindowsByPid(DWORD processId) {
@@ -128,7 +135,7 @@ private:
                 GetWindowRect(hwnd, &rect);
 
                 bool isExtension = IsExtensionWindow(title, className);
-                bool isMainWindow = strstr(title, "Google Chrome") != nullptr &&
+                bool isMainWindow = strstr(title, browserName.c_str()) != nullptr &&
                                   (GetWindowLong(hwnd, GWL_STYLE) & WS_OVERLAPPEDWINDOW);
 
                 if (isMainWindow || isExtension) {
@@ -148,19 +155,19 @@ private:
         @autoreleasepool {
             NSDictionary* options = @{(id)kAXTrustedCheckOptionPrompt: @YES};
             BOOL isEnabled = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
-            
+
             if (!isEnabled) {
                 NSAlert* alert = [[NSAlert alloc] init];
                 [alert setMessageText:@"Accessibility Permission Required"];
                 [alert setInformativeText:@"Chrome Power needs accessibility permission to manage windows. Please enable it in System Preferences."];
                 [alert addButtonWithTitle:@"Open System Preferences"];
                 [alert addButtonWithTitle:@"Cancel"];
-                
+
                 if ([alert runModal] == NSAlertFirstButtonReturn) {
                     [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]];
                 }
             }
-            
+
             return isEnabled;
         }
     }
@@ -172,10 +179,10 @@ private:
             char buffer[256];
             CFStringGetCString(titleRef, buffer, sizeof(buffer), kCFStringEncodingUTF8);
             CFRelease(titleRef);
-            
-            // Extension windows typically don't have "Google Chrome" in their titles
+
+            // Extension windows typically don't have browser name in their titles
             // and are usually smaller floating windows
-            if (strstr(buffer, "Google Chrome") == nullptr) {
+            if (strstr(buffer, browserName.c_str()) == nullptr) {
                 return true;
             }
         }
@@ -186,7 +193,7 @@ private:
             char buffer[256];
             CFStringGetCString(roleRef, buffer, sizeof(buffer), kCFStringEncodingUTF8);
             CFRelease(roleRef);
-            
+
             // Extension windows might have different roles
             if (strcmp(buffer, "AXWindow") == 0) {
                 // Additional check for window level
@@ -195,7 +202,7 @@ private:
                     char subroleBuffer[256];
                     CFStringGetCString(subroleRef, subroleBuffer, sizeof(subroleBuffer), kCFStringEncodingUTF8);
                     CFRelease(subroleRef);
-                    
+
                     return strcmp(subroleBuffer, "AXStandardWindow") != 0;
                 }
             }
@@ -228,22 +235,22 @@ private:
             char buffer[256];
             CFStringGetCString(titleRef, buffer, sizeof(buffer), kCFStringEncodingUTF8);
             CFRelease(titleRef);
-            
-            // Main Chrome window should contain "Google Chrome" in title
-            if (strstr(buffer, "Google Chrome") != nullptr) {
+
+            // Main browser window should contain browser name in title
+            if (strstr(buffer, browserName.c_str()) != nullptr) {
                 // Also check subrole to ensure it's a standard window
                 CFStringRef subroleRef;
                 if (AXUIElementCopyAttributeValue(window, kAXSubroleAttribute, (CFTypeRef*)&subroleRef) == kAXErrorSuccess) {
                     char subroleBuffer[256];
                     CFStringGetCString(subroleRef, subroleBuffer, sizeof(subroleBuffer), kCFStringEncodingUTF8);
                     CFRelease(subroleRef);
-                    
+
                     // Main window should have "AXStandardWindow" subrole
                     return strcmp(subroleBuffer, "AXStandardWindow") == 0;
                 }
             }
         }
-        
+
         return false;
     }
 
@@ -260,7 +267,7 @@ private:
             CFIndex count = CFArrayGetCount(windowArray);
             for (CFIndex i = 0; i < count; i++) {
                 AXUIElementRef window = (AXUIElementRef)CFArrayGetValueAtIndex(windowArray, i);
-                
+
                 // Only process visible windows
                 CFBooleanRef isMinimizedRef;
                 bool isVisible = true;
@@ -378,7 +385,7 @@ private:
             auto& monitors = *reinterpret_cast<std::vector<MonitorInfo>*>(lParam);
             MONITORINFOEX monitorInfo;
             monitorInfo.cbSize = sizeof(MONITORINFOEX);
-            
+
             if (GetMonitorInfo(hMonitor, &monitorInfo)) {
                 MonitorInfo info;
                 info.handle = hMonitor;
@@ -388,13 +395,13 @@ private:
             }
             return TRUE;
         }, reinterpret_cast<LPARAM>(&monitors));
-        
+
         // Sort monitors so that non-primary monitors come first
-        std::sort(monitors.begin(), monitors.end(), 
+        std::sort(monitors.begin(), monitors.end(),
             [](const MonitorInfo& a, const MonitorInfo& b) {
                 return a.isPrimary < b.isPrimary;
             });
-        
+
         return monitors;
     }
     #elif __APPLE__
@@ -408,10 +415,10 @@ private:
         std::vector<MonitorInfo> monitors;
         uint32_t displayCount;
         CGDirectDisplayID displays[32];
-        
+
         if (CGGetActiveDisplayList(32, displays, &displayCount) == kCGErrorSuccess) {
             CGDirectDisplayID mainDisplay = CGMainDisplayID();
-            
+
             for (uint32_t i = 0; i < displayCount; i++) {
                 MonitorInfo info;
                 info.id = displays[i];
@@ -419,14 +426,14 @@ private:
                 info.isPrimary = (displays[i] == mainDisplay);
                 monitors.push_back(info);
             }
-            
+
             // Sort monitors so that non-primary monitors come first
-            std::sort(monitors.begin(), monitors.end(), 
+            std::sort(monitors.begin(), monitors.end(),
                 [](const MonitorInfo& a, const MonitorInfo& b) {
                     return a.isPrimary < b.isPrimary;
                 });
         }
-        
+
         return monitors;
     }
     #endif
@@ -564,10 +571,10 @@ private:
         float effectiveHeight = height > 0 ? height : availableHeight / rows;
 
         // Handle main window
-        ArrangeWindow(mainPid, 
-                     screenX + spacing, 
-                     screenY + spacing, 
-                     effectiveWidth - spacing * 2, 
+        ArrangeWindow(mainPid,
+                     screenX + spacing,
+                     screenY + spacing,
+                     effectiveWidth - spacing * 2,
                      effectiveHeight - spacing * 2);
 
         // Handle child windows
@@ -576,7 +583,7 @@ private:
             int col = (i + 1) % columns;
             float x = screenX + (col * effectiveWidth) + (spacing * (col + 1));
             float y = screenY + (row * effectiveHeight) + (spacing * (row + 1));
-            
+
             ArrangeWindow(childPids[i],
                          x,
                          y,

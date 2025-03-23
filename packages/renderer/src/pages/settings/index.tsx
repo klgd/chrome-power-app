@@ -10,6 +10,8 @@ type FieldType = {
   localChromePath: string;
   chromiumBinPath: string;
   automationConnect: boolean;
+  chromeArgs: string;
+  browserName: string;
 };
 
 const Settings = () => {
@@ -19,6 +21,7 @@ const Settings = () => {
     localChromePath: '',
     chromiumBinPath: '',
     automationConnect: false,
+    browserName: '',
   });
   const [form] = Form.useForm();
   const {t} = useTranslation();
@@ -139,6 +142,25 @@ const Settings = () => {
               </Space.Compact>
             </Form.Item>
           )}
+          <Form.Item<FieldType>
+            label={t('settings_chrome_args')}
+            name="chromeArgs"
+          >
+            <Input.TextArea
+              placeholder={t('settings_chrome_args_placeholder')}
+              autoSize={{ minRows: 2, maxRows: 6 }}
+              value={formValue.chromeArgs}
+            />
+          </Form.Item>
+          <Form.Item<FieldType>
+            label={t('settings_browser_name')}
+            name="browserName"
+          >
+            <Input
+              placeholder={t('settings_browser_name_placeholder')}
+              value={formValue.browserName}
+            />
+          </Form.Item>
           {/* <Form.Item<FieldType>
             label={t('settings_automation_connect')}
             name="automationConnect"
